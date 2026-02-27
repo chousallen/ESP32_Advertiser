@@ -11,6 +11,12 @@ The system sends commands from a PC via UART to the ESP32. The ESP32 transmits t
 ```mermaid
 graph TD
     PC["Host PC (Python)"] <-->|"UART (Command / Report)"| ESP32["ESP32 Advertiser"]
+    
+    %% TCP/WiFi OTA Update Path (修正這裡的箭頭)
+    PC -.->|"Wi-Fi / TCP (OTA File Transfer)"| LPS1
+    PC -.->|"Wi-Fi / TCP (OTA File Transfer)"| LPSn
+
+    %% BLE Control Path
     ESP32 -->|"BLE Advertising (Burst)"| LPS1["LPS Device 1"]
     ESP32 -->|"BLE Advertising (Burst)"| LPS2["LPS Device 2"]
     ESP32 -->|"BLE Advertising (Burst)"| LPSn["LPS Device n"]
@@ -39,10 +45,11 @@ graph TD
 * **LPS Receiver**: Syncs time upon receiving *any* single packet.
 * **Status Feedback**: Receivers respond with an ACK packet containing their current state and remaining delay when queried, allowing the PC to monitor fleet status.
 
-4. **Content Update Layer (TCP/WiFi)**
+4. **Content Update Layer (TCP/Wi-Fi)**
 
-* **TCP Server**: The PC runs an asynchronous TCP server (`tcp_sender.py`) to serve content files.
-* **Direct Update**: LPS Receivers connect via WiFi to download specific Control and Frame data files based on their Player ID.
+* **TCP Server**: The PC runs an asynchronous TCP server (`Esp32TcpServer`) to host content files.
+* **Mode Switching**: Upon receiving the `UPLOAD` command via BLE, LPS Receivers automatically disable their BLE hardware and enable Wi-Fi to establish a direct connection with the PC.
+* **Direct Update**: Receivers download specific Control (`control.dat`) and Frame (`frame.dat`) data files based on their Player ID, save them to the SD card, and automatically reboot to apply the new shows.
 
 ## Project Structure
 
@@ -55,10 +62,10 @@ graph TD
 │       ├── bt_sender.c     # BLE HCI control (TX & RX), packet assembly
 │       └── bt_sender.h     
 ├── lps-ctrl/               # Python control package
-│   ├── examples/           # Usage examples
+│   ├── examples/           # Usage examples (e.g., lps_ctrl_ex.py, tcp_example.py)
 │   ├── src/lps_ctrl/       # Core source code
-│   │   ├── lps_ctrl.py     # UART Control Logic
-│   │   └── tcp_sender.py   # TCP File Server Logic
+│   │   ├── lps_ctrl.py     # UART Control Logic (ESP32BTSender)
+│   │   └── tcp_sender.py   # TCP File Server Logic (Esp32TcpServer)
 │   ├── pyproject.toml      # Configuration file
 │   └── README.md           
 ```
