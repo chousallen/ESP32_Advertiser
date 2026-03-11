@@ -63,14 +63,13 @@ static void hci_cmd_send_ble_set_adv_data(uint8_t cmd_type, uint32_t delay_ms, u
     
     raw_adv_data[idx++] = 2; raw_adv_data[idx++] = 0x01; raw_adv_data[idx++] = 0x06;
     
-    int len_idx = idx++;
+    raw_adv_data[idx++] = 22; 
+    raw_adv_data[idx++] = 0xFF; 
+    raw_adv_data[idx++] = 0xFF;
     raw_adv_data[idx++] = 0xFF;
     
-    // ('L' = 0x4C, 'D' = 0x44)
-    raw_adv_data[idx++] = 0x4C; 
-    raw_adv_data[idx++] = 0x44;
-    
-    // Slot ID + Cmd
+    raw_adv_data[idx++] = 0x4C; // 'L'
+    raw_adv_data[idx++] = 0x44; // 'D'
     raw_adv_data[idx++] = cmd_type;
 
     // Target Mask (8 bytes)
@@ -85,20 +84,27 @@ static void hci_cmd_send_ble_set_adv_data(uint8_t cmd_type, uint32_t delay_ms, u
     raw_adv_data[idx++] = (delay_ms)       & 0xFF;
 
     uint8_t base_cmd = cmd_type & 0x0F;
-    if (base_cmd == 0x01) {
+    if (base_cmd == 0x01) { // PLAY: 4 bytes
         raw_adv_data[idx++] = (prep_led_ms >> 24) & 0xFF;
         raw_adv_data[idx++] = (prep_led_ms >> 16) & 0xFF;
         raw_adv_data[idx++] = (prep_led_ms >> 8)  & 0xFF;
         raw_adv_data[idx++] = (prep_led_ms)       & 0xFF;
-    } else if (base_cmd == 0x05) {
+    } else if (base_cmd == 0x05) { // TEST: 3 bytes + 1 byte pad
         raw_adv_data[idx++] = data[0];
         raw_adv_data[idx++] = data[1];
         raw_adv_data[idx++] = data[2];
-    } else if (base_cmd == 0x06) {
+        raw_adv_data[idx++] = 0x00; 
+    } else if (base_cmd == 0x06) { // CANCEL: 1 byte + 3 bytes pad
         raw_adv_data[idx++] = data[0]; 
+        raw_adv_data[idx++] = 0x00;
+        raw_adv_data[idx++] = 0x00;
+        raw_adv_data[idx++] = 0x00;
+    } else { // 4 bytes pad
+        raw_adv_data[idx++] = 0x00;
+        raw_adv_data[idx++] = 0x00;
+        raw_adv_data[idx++] = 0x00;
+        raw_adv_data[idx++] = 0x00;
     }
-    
-    raw_adv_data[len_idx] = (idx - len_idx) - 1;
 
     uint16_t sz = make_cmd_ble_set_adv_data(hci_cmd_buf, idx, raw_adv_data);
     if (esp_vhci_host_check_send_available()) esp_vhci_host_send_packet(hci_cmd_buf, sz);
@@ -149,14 +155,13 @@ static int host_rcv_pkt(uint8_t *data, uint16_t len) {
             uint8_t ad_len = adv_data[offset++];
             if(ad_len == 0) break;
             uint8_t ad_type = adv_data[offset++];
-            
-            if(ad_type == 0xFF && (adv_data[offset] == 0x4C && adv_data[offset + 1] == 0x44)) { 
-                if (adv_data[offset+2] == 0x07 && ad_len == 12) {
-                    uint8_t target_id = adv_data[offset+3];
-                    uint8_t cmd_id    = adv_data[offset+4];
-                    uint8_t cmd_type  = adv_data[offset+5];
-                    uint32_t delay_ms = (adv_data[offset+6] << 24) | (adv_data[offset+7] << 16) | (adv_data[offset+8] << 8) | adv_data[offset+9];
-                    uint8_t state = adv_data[offset+10];
+            if(ad_type == 0xFF && (adv_data[offset] == 0xFF && adv_data[offset + 1] == 0xFF) && (adv_data[offset+2] == 0x4C && adv_data[offset + 3] == 0x44)) { 
+                if (adv_data[offset+4] == 0x07 && ad_len == 14) {
+                    uint8_t target_id = adv_data[offset+5];
+                    uint8_t cmd_id    = adv_data[offset+6];
+                    uint8_t cmd_type  = adv_data[offset+7];
+                    uint32_t delay_ms = (adv_data[offset+8] << 24) | (adv_data[offset+9] << 16) | (adv_data[offset+10] << 8) | adv_data[offset+11];
+                    uint8_t state = adv_data[offset+12];
                     
                     printf("FOUND:%d,%d,%d,%lu,%d\n", target_id, cmd_id, cmd_type, delay_ms, state);
                 }
@@ -164,7 +169,7 @@ static int host_rcv_pkt(uint8_t *data, uint16_t len) {
             
             offset += (ad_len - 1);
         }
-        payload += (10 + data_len + 1);
+        payload += (12 + data_len + 1);
     }
     return ESP_OK;
 }

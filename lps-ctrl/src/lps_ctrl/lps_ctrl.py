@@ -131,11 +131,11 @@ class ESP32BTSender:
         prep_led_ms = int(prep_led_sec * 1000)
         
         target_mask = 0
-        if not target_ids or 0 in target_ids:
+        if not target_ids:
             target_mask = 0xFFFFFFFFFFFFFFFF 
         else:
             for pid in target_ids:
-                if pid > 0: target_mask |= (1 << pid)
+                target_mask |= (1 << pid)
         
         t_start_pc = time.perf_counter()
         target_time = t_start_pc + delay_sec
